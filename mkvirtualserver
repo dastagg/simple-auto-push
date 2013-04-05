@@ -1,0 +1,101 @@
+#!/bin/bash
+# This script is used to create virtual hosts.
+
+# Set up the default parameters
+read -e -p "Enter the web home directory:" -i "/var/www" homedir
+read -e -p "Enter the git repository base directory:" -i "/home/git/repositories" gitdir
+read -e -p "Enter the domain name for the server:" -i "staggsystems.net" sn
+read -e -p "Enter the Project name:" -i "" proj
+
+if [ -z "$proj" ]; then
+  echo "Project name cannot be blank!"
+  exit
+fi
+
+
+# Create the web directory and a index.php test file
+cd $homedir
+mkdir $proj
+cd $homedir/$proj
+mkdir "public_html"
+
+# Set the owner and change permissions
+chown -R www-data:www-data $homedir/$proj/
+chmod -R '750' $homedir/$proj/public_html
+
+# Setup the permissions so git can write to website
+setfacl -Rm d:u:www-data:rwx,u:git:rwx $homedir/$proj
+
+# Create the git directory and a bare git repository
+cd $gitdir
+mkdir $proj.git
+cd $gitdir/$proj.git
+git init --bare
+cat >hooks/post-receive <<EOF
+#!/bin/bash
+GIT_WORK_TREE=$homedir/$proj/public_html git checkout -f
+EOF
+
+chmod ug+x hooks/post-receive
+
+chown -R git:git $gitdir/$proj.git
+
+# Create a directory for your apache errors log
+mkdir /var/log/apache2/$proj/
+
+# Creation the file with VirtualHost configuration in /etc/apache2/site-available/
+echo "<VirtualHost *:80>
+        ServerAdmin webadmin@localhost
+        ServerName $proj.$sn
+        ServerAlias www.$proj.$sn
+
+        DocumentRoot $homedir/$proj/public_html/
+        <Directory />
+                Options FollowSymLinks
+                AllowOverride None
+        </Directory>
+        <Directory $homedir/$proj/public_html/>
+                Options Indexes FollowSymLinks MultiViews
+                AllowOverride None
+                Order allow,deny
+                allow from all
+        </Directory>
+
+        ScriptAlias /cgi-bin/ /usr/lib/cgi-bin/
+
+        <Directory "'/usr/lib/cgi-bin'">
+                AllowOverride None
+                Options +ExecCGI -MultiViews +SymLinksIfOwnerMatch
+                Order allow,deny
+                Allow from all
+        </Directory>
+
+        ErrorLog /var/log/apache2/$proj/error.log
+
+        # Possible values include: debug, info, notice, warn, error, crit,
+        # alert, emerg.
+        LogLevel warn
+
+        CustomLog /var/log/apache2/$proj/access.log combined
+
+    Alias /doc/ "'/usr/share/doc/'"
+
+    <Directory "'/usr/share/doc/'">
+        Options Indexes MultiViews FollowSymLinks
+        AllowOverride None
+        Order deny,allow
+        Deny from all
+        Allow from 127.0.0.0/255.0.0.0 ::1/128
+    </Directory>
+
+</VirtualHost>" > /etc/apache2/sites-available/$proj
+
+# Add the host to the hosts file
+echo 127.0.0.1 $proj.$sn >> /etc/hosts
+
+# Enable the site
+a2ensite $proj
+
+# Reload Apache2
+service apache2 reload
+

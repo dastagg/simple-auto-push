@@ -1,0 +1,54 @@
+#!/bin/bash
+# This script is used to remove virtual hosts.
+
+# Set up the default parameters
+read -e -p "Enter the web home directory:" -i "/var/www" homedir
+read -e -p "Enter the web log directory:" -i "/var/log/apache2" logdir
+read -e -p "Enter the git repository base directory:" -i "/home/git/repositories" gitdir
+read -e -p "Enter the domain name for the server:" -i "staggsystems.net" sn
+read -e -p "Enter the Project name:" -i "" PROJECT
+
+if [ -z "$PROJECT" ]; then
+  echo "Project name cannot be blank!"
+  exit
+fi
+
+# Remove the website and logs
+if rm -rf $homedir/$PROJECT; then
+  echo "Deleted $homedir/$PROJECT"
+else
+  echo "WARNING: $homedir/$PROJECT was not removed!"
+fi
+
+if rm -rf $logdir/$PROJECT; then
+  echo "Deleted $logdir/$PROJECT"
+else
+  echo "WARNING: $logdir/$PROJECT was not removed!"
+fi
+
+a2dissite $PROJECT
+
+if rm -rf /etc/apache2/sites-available/$PROJECT; then
+  echo "Deleted /etc/apache2/sites-available/$PROJECT"
+else
+  echo "WARNING: /etc/apache2/sites-available/$PROJECT was not removed!"
+fi
+
+# Remove the git repository
+if rm -rf $gitdir/$PROJECT.git; then
+  echo "Deleted $gitdir/$PROJECT.git"
+else
+  echo "WARNING: $gitdir/$PROJECT.git was not removed!"
+fi
+
+# Remove the hosts entry
+gitrepo="127.0.0.1 $PROJECT.$sn"
+#echo "gitrepo: $gitrepo"
+if sed -i "/$gitrepo/d" /etc/hosts; then
+  echo "Deleted $gitrepo from /etc/hosts file"
+else
+  echo "WARNING: $gitrepo was not removed!"
+fi
+
+# Reload Apache
+service apache2 reload

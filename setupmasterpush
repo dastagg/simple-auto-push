@@ -1,0 +1,22 @@
+#!/bin/bash
+# This script is used to setup the repository to push code
+# from the master branch only to the "Production" server.
+
+# Set up the default parameters
+HOSTNAME="staggdemo"
+
+read -e -p "Enter the Project name:" -i "" PROJECT
+
+if [ -z "$PROJECT" ]; then
+  echo "Project name cannot be blank!"
+  exit
+fi
+
+cd /home/gitolite/repositories/$PROJECT.git
+
+cp ../../support/post-receive hooks/.
+chmod ug+x hooks/post-receive
+
+git remote add origin $HOSTNAME:repositories/$PROJECT.git
+
+git push -u origin master
